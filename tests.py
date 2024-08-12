@@ -1,5 +1,4 @@
 from unittest import TestCase
-
 from app import app
 from models import db, Cupcake
 
@@ -10,10 +9,7 @@ app.config['SQLALCHEMY_ECHO'] = False
 # Make Flask errors be real errors, rather than HTML pages with error info
 app.config['TESTING'] = True
 
-db.drop_all()
-db.create_all()
-
-
+# Define test data globally, so they are available in the test cases
 CUPCAKE_DATA = {
     "flavor": "TestFlavor",
     "size": "TestSize",
@@ -28,15 +24,20 @@ CUPCAKE_DATA_2 = {
     "image": "http://test.com/cupcake2.jpg"
 }
 
-
 class CupcakeViewsTestCase(TestCase):
     """Tests for views of API."""
 
     def setUp(self):
         """Make demo data."""
+        # Push the application context
+        self.app_context = app.app_context()
+        self.app_context.push()
 
-        Cupcake.query.delete()
+        # Recreate all tables
+        db.drop_all()
+        db.create_all()
 
+        # Add test data
         cupcake = Cupcake(**CUPCAKE_DATA)
         db.session.add(cupcake)
         db.session.commit()
@@ -45,13 +46,15 @@ class CupcakeViewsTestCase(TestCase):
 
     def tearDown(self):
         """Clean up fouled transactions."""
-
         db.session.rollback()
+        db.drop_all()
+
+        # Pop the application context
+        self.app_context.pop()
 
     def test_list_cupcakes(self):
         with app.test_client() as client:
             resp = client.get("/api/cupcakes")
-
             self.assertEqual(resp.status_code, 200)
 
             data = resp.json
@@ -71,7 +74,6 @@ class CupcakeViewsTestCase(TestCase):
         with app.test_client() as client:
             url = f"/api/cupcakes/{self.cupcake.id}"
             resp = client.get(url)
-
             self.assertEqual(resp.status_code, 200)
             data = resp.json
             self.assertEqual(data, {
@@ -88,7 +90,6 @@ class CupcakeViewsTestCase(TestCase):
         with app.test_client() as client:
             url = "/api/cupcakes"
             resp = client.post(url, json=CUPCAKE_DATA_2)
-
             self.assertEqual(resp.status_code, 201)
 
             data = resp.json
